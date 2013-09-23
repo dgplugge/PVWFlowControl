@@ -1,0 +1,14 @@
+
+Beta 0.9r.34 Customized Dot as circle rather than star for PowerPoint
+
+Beta 0.9r.35 Gating font for labels and gate creation redraw
+
+Beta 0.9r.36 Export statistics fix, prototype for moving rect gate annotations
+
+Beta 0.9r.37 Removed prototyped gating
+
+Beta 0.9r.38 Gated out fix, more robust gate interface, fixes panel update
+
+Beta 0.9r.39 Polygon fix outside of bounds
+
+

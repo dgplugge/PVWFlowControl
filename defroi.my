@@ -1,0 +1,155 @@
+;
+; $Id: defroi.pro,v 1.6 1997/12/19 18:56:58 landers Exp $
+;
+FUNCTION MyRoi, Sx, Sy, Xverts, Yverts, X0=x0, Y0=y0, Zoom=ZOOM, $
+                 Noregion=Noregion
+
+   COMMON Colors, orig_red, orig_green, orig_blue, red, green, blue
+
+   ON_ERROR, 2 ;Return to caller if error
+
+   nc = !D.table_size           ;# of colors available
+   IF nc EQ 0 THEN message, 'defroi.static_device', /Lookup
+   IF N_ELEMENTS(red) LE 0 THEN BEGIN ;Define bw table?
+   red = indgen(nc) & green = red & blue = red & ENDIF
+
+   IF N_ELEMENTS(x0)   LE 0 THEN x0 = 0
+   IF N_ELEMENTS(y0)   LE 0 THEN y0 = 0
+   IF N_ELEMENTS(zoom) LE 0 THEN zoom = 1
+      
+      ;;
+      ;; For X device do graphics_function, not write_mask.
+      ;;
+      
+   device, get_graphics_function = old_mask
+   
+   device, set_graphics_function = 6 ; GXxor function
+   
+
+Again:
+   n = 0
+   PRINT, STRLOOKUP('defroi.instructions1') ; 'Left button to mark point'
+   PRINT, STRLOOKUP('defroi.instructions2') ; 'Middle button to erase previous point'
+   PRINT, STRLOOKUP('defroi.instructions3') ; 'Right button to close region'
+   maxpnts = 1000               ;max # of points.
+   xverts = intarr(maxpnts)     ;arrays
+   yverts = intarr(maxpnts)
+   xprev = -1
+   yprev = -1
+   done  = 0
+   
+   REPEAT BEGIN
+      
+      !Mouse.button = 0
+      cursor, xx, yy, 0, /Device ;get x,y, no wait, device coords.
+      
+      CASE !Mouse.button OF
+
+         ;;
+         ;; MB1 is used to add a vertex to the polygon.
+         ;;
+         
+         1 : BEGIN
+            
+            xx = (xx - x0) / zoom ;To image coords
+            yy = (yy - y0) / zoom
+            
+            IF (xx GE 0) AND (xx LT sx) AND (yy GE 0) AND (yy LT sy) AND $
+              ((xx NE xprev) OR (yy NE yprev)) THEN BEGIN
+               
+               xprev = xx
+               yprev = yy
+               
+               IF n GE (maxpnts-1) THEN BEGIN
+                  print, '' + STRLOOKUP('defroi.too_many')
+                  n = n-1
+               ENDIF
+               
+               n = n + 1
+               
+               xverts(n-1) = xx ;In pixel coords
+               yverts(n-1) = yy
+
+               IF n GT 1 THEN BEGIN
+                  
+                   px = xverts(n-2:n-1) * zoom + x0
+                   py = yverts(n-2:n-1) * zoom + y0
+                   
+                   c = !P.Color
+                   
+                   plots, px, py, /Device, /NoClip, Color = c
+               ENDIF
+               
+            ENDIF
+            
+         END                    ;; !Mouse.Button EQ 1
+
+         ;;
+         ;; MB2 is used to remove the last vertex from the list.
+         ;;
+         
+         2 : BEGIN
+
+            ;; Wait til user releases the button so that this only happens
+            ;; on mouse button up events.  Otherwise, two vertices get
+            ;; removed for each click of MB2.
+
+            WHILE !Err EQ 2 DO Cursor, foo, bar, 0, /Device
+            
+            IF n GT 0 THEN n = n - 1
+            IF n GT 0 THEN BEGIN
+               
+               px = xverts(n-1:n) * zoom + x0
+               py = yverts(n-1:n) * zoom + y0
+
+               c = !P.color
+               plots, px, py, /Device, /NoClip, Color = c
+               
+               WAIT, 0.1         ;dont erase too quickly
+               
+            ENDIF
+            
+         END                    ;; !Mouse.Button EQ 2
+
+         ;;
+         ;; MB3 is used to complete the region definition.
+         ;;
+         
+         4 : done = 1
+
+         ;;
+         ;; Ignore chorded mouse button events.
+         ;;
+         
+         ELSE : ; do nothing
+         
+      ENDCASE
+
+   ENDREP UNTIL (done NE 0)
+
+   IF n LT 3 THEN BEGIN
+      PRINT, STRLOOKUP('defroi.too_few')
+      GOTO, again
+   ENDIF
+   
+   xverts = xverts(0:n-1)       ; truncate
+   yverts = yverts(0:n-1)
+   
+   px = [xverts(0), xverts(n-1)] * zoom + x0
+   py = [yverts(0), yverts(n-1)] * zoom + y0
+   
+   c = !P.Color
+
+   plots, px, py, /Device, Color = c  ; Complete the polygon
+   
+   IF !Order NE 0 THEN yverts = sy-1-yverts ;Invert Y?
+
+   device, set_graphics_function = old_mask
+   
+ 
+   IF KEYWORD_SET(noregion) THEN a = 0 $
+     ELSE a = polyfillv(xverts, yverts, sx, sy) ; get subscripts inside area
+
+   RETURN, a
+
+END ;; DEFROI
